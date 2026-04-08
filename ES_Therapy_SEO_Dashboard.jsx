@@ -1,0 +1,843 @@
+import { useState } from "react";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line,
+  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
+} from "recharts";
+
+// ─── PALETTE ────────────────────────────────────────────────────────────────
+const C = {
+  pri: "#2D6A4F", sec: "#40916C", acc: "#52B788", lt: "#95D5B2",
+  warm: "#D4A373", alert: "#E63946", warn: "#F4A261", info: "#457B9D",
+  bg: "#FAFAF5", card: "#FFFFFF", text: "#1B4332", mut: "#6B7280",
+  pass: "#10B981", fail: "#EF4444", part: "#F59E0B",
+};
+
+// ─── HELPER COMPONENTS ──────────────────────────────────────────────────────
+function Stat({ icon, label, value, sub, color = C.pri }) {
+  return (
+    <div style={{ background: C.card, borderRadius: 12, padding: "18px 22px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)", borderLeft: `4px solid ${color}`, minWidth: 0 }}>
+      <div style={{ fontSize: 12, color: C.mut, marginBottom: 2, fontWeight: 600 }}>{icon} {label}</div>
+      <div style={{ fontSize: 30, fontWeight: 700, color: C.text, lineHeight: 1.1 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: C.mut, marginTop: 3 }}>{sub}</div>}
+    </div>
+  );
+}
+function Sec({ children, sub }) {
+  return (<div style={{ marginBottom: 14, marginTop: 6 }}><h2 style={{ fontSize: 17, fontWeight: 700, color: C.text, margin: 0 }}>{children}</h2>{sub && <p style={{ fontSize: 12, color: C.mut, margin: "3px 0 0" }}>{sub}</p>}</div>);
+}
+function Badge({ children, color = C.pri }) {
+  return <span style={{ display: "inline-block", padding: "2px 8px", borderRadius: 999, fontSize: 10, fontWeight: 700, background: color + "18", color }}>{children}</span>;
+}
+function ScoreDot({ score, max = 100 }) {
+  const pct = score / max;
+  const col = pct >= 0.8 ? C.pass : pct >= 0.5 ? C.warn : C.fail;
+  return <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}><span style={{ width: 10, height: 10, borderRadius: "50%", background: col, display: "inline-block" }} /><span style={{ fontWeight: 700, fontSize: 14, color: col }}>{score}</span></span>;
+}
+function StatusBadge({ status }) {
+  const map = { done: [C.pass, "Done"], partial: [C.warn, "Partial"], todo: [C.mut, "Not started"], blocked: [C.fail, "Blocked"], na: [C.info, "N/A"] };
+  const [col, txt] = map[status] || map.todo;
+  return <Badge color={col}>{txt}</Badge>;
+}
+function FlagCard({ type, text }) {
+  const colMap = { critical: C.alert, quick: C.pass, threat: C.warn, action: C.warm, verify: C.info, backlink: C.acc };
+  return (
+    <div style={{ padding: "11px 14px", borderRadius: 8, background: "#F9FAFB", fontSize: 12.5, lineHeight: 1.45, borderLeft: `3px solid ${colMap[type] || C.mut}` }}>
+      <span style={{ fontWeight: 700, fontSize: 10, color: C.mut, textTransform: "uppercase" }}>{type}</span><br />{text}
+    </div>
+  );
+}
+
+// ─── DATA: SITE AUDIT ───────────────────────────────────────────────────────
+const sitePages = [
+  { url: "/", title: "Home | Counselling & Psychotherapy in Gillingham, Medway", metaDesc: "ES Therapy Centre provides professional counselling and psychotherapy for individuals in Gillingham, Medway, Kent online.", titleLen: 57, descLen: 105, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown (Bold Builder)", keywordTarget: "medway therapy, therapy medway", priority: "P1", status: "Existing" },
+  { url: "/services/", title: "Therapeutic Services | Gillingham, Medway & Online", metaDesc: "Explore our counselling and psychotherapy services in Gillingham, Medway and online…", titleLen: 51, descLen: 106, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy medway services", priority: "P1", status: "Existing" },
+  { url: "/services/individual-therapy-in-medway/", title: "Individual Therapy in Medway, Kent - In person and online", metaDesc: "Experienced therapist providing individual therapy in Medway, Kent. Flexible in-person and online sessions…", titleLen: 57, descLen: 103, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "individual therapy medway", priority: "P1", status: "Existing" },
+  { url: "/services/therapy-in-chatham/", title: "Therapy in Chatham | Counselling & Psychotherapy | ES Therapy", metaDesc: "Looking for therapy in Chatham? ES Therapy Centre offers CBT, counselling and psychotherapy just minutes away…", titleLen: 60, descLen: 111, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "counselling chatham, therapist chatham", priority: "P1", status: "New (Apr 2026)" },
+  { url: "/services/therapy-in-rainham/", title: "Therapy in Rainham | Counselling & Psychotherapy | ES Therapy", metaDesc: "Looking for therapy in Rainham? ES Therapy Centre offers confidential counselling for adults in Medway…", titleLen: 60, descLen: 104, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "couples counselling rainham kent", priority: "P1", status: "New (Apr 2026)" },
+  { url: "/services/low-cost-therapy/", title: "Low-cost Therapy - Gillingham, Medway, Kent & Online", metaDesc: "Low-cost therapy available in Gillingham, Medway. Affordable, professional counselling at ES Therapy Centre…", titleLen: 52, descLen: 107, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "low cost therapy medway", priority: "P2", status: "Existing" },
+  { url: "/services/therapy-for-students/", title: "Therapy for Students | Gillingham, Medway & Online", metaDesc: "Confidential therapy for students in Gillingham, Medway, and online…", titleLen: 51, descLen: 98, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy for students medway", priority: "P3", status: "Existing" },
+  { url: "/services/therapy-for-older-adults/", title: "Therapy for Older Adults | Gillingham, Medway & Online", metaDesc: "Specialist therapy for older adults in Gillingham, Medway, and online…", titleLen: 54, descLen: 99, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy older adults medway", priority: "P3", status: "Existing" },
+  { url: "/services/psychology-career-coaching/", title: "Psychology Career Coaching | Gillingham, Medway & Online", metaDesc: "Psychology career coaching in Gillingham, Medway…", titleLen: 56, descLen: 89, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "psychology career coaching", priority: "P3", status: "Existing" },
+  { url: "/fees/", title: "Fees - Counselling & Psychotherapy | Gillingham, Medway | ES Therapy", metaDesc: "Transparent therapy fees in Medway, Kent. Individual therapy from £95…", titleLen: 68, descLen: 109, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy fees medway, how much cbt cost", priority: "P2", status: "Existing" },
+  { url: "/about/", title: "About Therapy | Counselling & Psychotherapy in Gillingham", metaDesc: "Learn about ES Therapy, offering compassionate counselling and psychotherapy for adults…", titleLen: 56, descLen: 103, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "about ES Therapy", priority: "P2", status: "Existing" },
+  { url: "/about/approaches/", title: "Therapeutic Approaches - Counselling & Psychotherapy | Gillingham, Medway | ES Therapy", metaDesc: "Discover a variety of effective therapeutic approaches available at ES Therapy Centre…", titleLen: 85, descLen: 107, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "CBT, psychotherapy, therapeutic approaches", priority: "P2", status: "Existing" },
+  { url: "/about/frequently-asked-questions/", title: "Frequently Asked Questions | Gillingham, Medway & Online", metaDesc: "Explore frequently asked questions about counselling and psychotherapy services…", titleLen: 56, descLen: 103, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy FAQ, counselling questions", priority: "P2", status: "Existing" },
+  { url: "/contact/", title: "Contact | ES Therapy Centre – Gillingham, Medway", metaDesc: "Have a question or want to book a session? Contact ES Therapy Centre in Gillingham, Medway…", titleLen: 49, descLen: 96, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "contact therapist medway", priority: "P2", status: "Existing" },
+  { url: "/blog/", title: "Blog - Counselling & Psychotherapy | Gillingham, Medway | ES Therapy", metaDesc: '"Say more"', titleLen: 68, descLen: 8, schema: "Organization, WebPage, Breadcrumb", hasH1: "Unknown", keywordTarget: "therapy blog", priority: "P2", status: "Existing" },
+];
+
+const blogPosts = [
+  { title: "Social Anxiety: More Than the Fear of Crowds", date: "Apr 7, 2026", author: "Dr Esthefanea F. Santos", categories: "Anxiety", series: "Anxiety Series" },
+  { title: "Health Anxiety Explained: Signs, Causes & How to Manage It", date: "Nov 27, 2025", author: "Dr Esthefanea F. Santos", categories: "Health anxiety", series: "Anxiety Series" },
+  { title: "Understanding Generalised Anxiety Disorder (GAD)", date: "Nov 6, 2025", author: "Dr Esthefanea F. Santos", categories: "GAD, Anxiety", series: "Anxiety Series" },
+  { title: "The Cause of Tinnitus: Mapping the Ear-Brain Connection", date: "Mar 24, 2026", author: "Guest", categories: "Hearing health", series: "" },
+  { title: "Understanding Anxiety and Emotional Regulation", date: "Sep 7, 2025", author: "Dr Esthefanea F. Santos", categories: "Emotional regulation", series: "" },
+  { title: "When Food Becomes the Fix: Coping Through Control", date: "Aug 12, 2025", author: "Guest", categories: "Eating Disorders", series: "" },
+  { title: "Meet Your Psychologist in Medway", date: "Jul 18, 2025", author: "Dr Esthefanea F. Santos", categories: "Psychologist in Medway", series: "" },
+  { title: "Walking and Mental Health: What's the Link?", date: "Jun 30, 2025", author: "Dr Esthefanea F. Santos", categories: "Nature, Mental Health", series: "" },
+  { title: "Starting Therapy: What to Expect in Your First Session", date: "May 23, 2025", author: "Dr Esthefanea F. Santos", categories: "Counselling, First session", series: "" },
+  { title: "How To Get The Most Out Of Therapy", date: "May 20, 2025", author: "Dr Esthefanea F. Santos", categories: "Sessions, Advice", series: "" },
+  { title: "Therapy for Expats in London", date: "2023", author: "Dr Esthefanea F. Santos", categories: "Culture, Expats", series: "" },
+  { title: "Menopause & Identity in Trans Individuals", date: "2022", author: "Dr Esthefanea F. Santos", categories: "Research", series: "" },
+  { title: "Five Tips to Prepare for Remote Therapy", date: "2023", author: "Dr Esthefanea F. Santos", categories: "Sessions, Advice", series: "" },
+];
+
+const technicalIssues = [
+  { area: "SEO Plugin", issue: "All in One SEO active — NOT Rank Math as planned", severity: "high", detail: "Instructions specify Rank Math. AIOSEO is installed instead. Not a blocker but means all batch instructions reference wrong plugin UI." },
+  { area: "Duplicate sitemap", issue: "sitemap.rss referenced in robots.txt alongside sitemap.xml", severity: "medium", detail: "robots.txt declares both sitemap.xml and sitemap.rss. Consolidate to one." },
+  { area: "Blog meta desc", issue: '/blog/ meta description is "Say more" (broken/placeholder)', severity: "high", detail: "The blog index page has the generic tagline as its meta description instead of a proper SEO description." },
+  { area: "Schema: org desc", issue: 'Organization schema description is "Say more"', severity: "high", detail: "The Organization JSON-LD has description: \"Say more\" — the tagline, not a real business description." },
+  { area: "Schema: logo URL", issue: "Logo URL uses old staging domain (vb8.b79.myftpupload.com)", severity: "high", detail: "Organization schema logo points to http://vb8.b79.myftpupload.com/... — an old Hostinger staging URL. Must be updated to production domain." },
+  { area: "Schema type", issue: "No MedicalBusiness or LocalBusiness schema — only generic Organization", severity: "high", detail: "A therapy centre classified as YMYL should use MedicalBusiness schema to signal credentials to Google. Currently only Organization." },
+  { area: "FAQ schema", issue: "FAQ page has no FAQPage schema markup", severity: "medium", detail: "The FAQ page exists but has no FAQPage structured data — missing rich result opportunity." },
+  { area: "Service schema", issue: "No Service schema on any service page", severity: "medium", detail: "Service pages lack Service schema markup. Batch 9 of the instructions addresses this." },
+  { area: "Meta title length", issue: "Approaches page title 85 chars (over 60 limit)", severity: "medium", detail: "\"Therapeutic Approaches - Counselling & Psychotherapy | Gillingham, Medway | ES Therapy\" = 85 chars. Will truncate in SERPs." },
+  { area: "Meta title length", issue: "Fees page title 68 chars (over 60 limit)", severity: "low", detail: "Slightly over. Minor truncation." },
+  { area: "Blog template exposed", issue: "blog-post-template page is published and in sitemap", severity: "medium", detail: "A \"Blog Post Template\" page (ID 3917) is publicly accessible at /blog-post-template/ and included in the page sitemap. Should be draft or noindexed." },
+  { area: "Footer pages indexed", issue: "Footer-Blog and Footer-Home-02 pages are published", severity: "low", detail: "Template pages for footers are published as pages. Likely not in sitemap but should be checked/noindexed." },
+  { area: "Tag bloat", issue: "63 tags, many with 0-1 posts — thin content risk", severity: "high", detail: "63 tags found. 19 have 0 posts (empty archives). Many with only 1 post. Creates dozens of thin-content indexed pages competing with real content." },
+  { area: "Category overlap", issue: "Duplicate categories: Counseling vs Counselling, Guest contributor vs Guest Contributors", severity: "medium", detail: "Multiple near-duplicate categories exist. Should be consolidated." },
+  { area: "Internal links", issue: "275+ internal 301 redirect chains (from audit)", severity: "high", detail: "Per the original audit, 275+ internal links point to redirected URLs. Batches 4 & 7 address this." },
+  { area: "HTTPS", issue: "Needs verification that http→https redirect is active", severity: "medium", detail: "Batch 0 prerequisite. Should be confirmed." },
+];
+
+// ─── DATA: BATCH PROGRESS ───────────────────────────────────────────────────
+const batchProgress = [
+  { id: "B0", name: "Plugin Setup & Baseline", month: "Pre", status: "partial", notes: "AIOSEO installed (not Rank Math). Redirection plugin active. HTTPS & backup status unconfirmed." },
+  { id: "B1", name: "Quick Structural Wins", month: "M2", status: "todo", notes: "Blog nav link fix + counselling anchor link. Not started." },
+  { id: "B2", name: "Sitemap Consolidation", month: "M2", status: "partial", notes: "Sitemap exists with posts + pages only. But sitemap.rss still in robots.txt. Blog template in sitemap." },
+  { id: "B3", name: "Tag Folder & Taxonomy Fix", month: "M3", status: "todo", notes: "63 tags found, 19 empty. Not noindexed yet. Critical thin content issue." },
+  { id: "B4", name: "Internal 301 Links (Pass 1)", month: "M2", status: "todo", notes: "275+ redirect chains identified. Homepage & service page links need fixing." },
+  { id: "B5", name: "Metadata & Heading Rewrites", month: "M2", status: "partial", notes: "New pages (Chatham, Rainham, Individual) have good meta. Older pages have issues (blog desc, title lengths). Keyword research done." },
+  { id: "B6", name: "Alt Text & Image Optimisation", month: "M2", status: "todo", notes: "Not audited yet." },
+  { id: "B7", name: "Internal 301 Links (Pass 2)", month: "M3", status: "todo", notes: "Blog post internal links. Depends on B4." },
+  { id: "B8", name: "Content & E-E-A-T Audit", month: "M4", status: "partial", notes: "Blog content growing (13 posts, anxiety series). E-E-A-T signals weak — org schema uses placeholder. No BABCP accreditation visible." },
+  { id: "B9", name: "Schema Markup", month: "M6", status: "todo", notes: "Only Organization + WebPage + Breadcrumb currently. No MedicalBusiness, Service, or FAQPage schema." },
+  { id: "B10", name: "Local SEO & GBP", month: "M5", status: "partial", notes: "Chatham + Rainham location pages created (Batch 10 deliverable). GBP audit & citations not done. NAP consistency unknown." },
+  { id: "B11", name: "Authority & Backlinks", month: "M6", status: "todo", notes: "9+ directory opportunities identified in keyword research. No outreach yet." },
+];
+
+// ─── DATA: KEYWORD RESEARCH ─────────────────────────────────────────────────
+const dailyResearch = [
+  { date: "Mar 26", keywords: 42, cum: 42 },
+  { date: "Mar 27", keywords: 42, cum: 84 },
+  { date: "Mar 29", keywords: 44, cum: 128 },
+  { date: "Apr 2", keywords: 124, cum: 252 },
+  { date: "Apr 3", keywords: 28, cum: 280 },
+  { date: "Apr 4", keywords: 36, cum: 316 },
+  { date: "Apr 5", keywords: 38, cum: 354 },
+  { date: "Apr 6", keywords: 37, cum: 391 },
+  { date: "Apr 7", keywords: 29, cum: 420 },
+];
+
+const kwByRelevance = [
+  { name: "Target", value: 212, color: C.pri },
+  { name: "Partial", value: 55, color: C.warn },
+  { name: "Not relevant", value: 10, color: C.alert },
+  { name: "Other/Check", value: 191, color: C.mut },
+];
+const kwByIntent = [
+  { name: "Transactional", value: 137 },
+  { name: "Informational", value: 104 },
+  { name: "Commercial", value: 11 },
+  { name: "Comparison", value: 3 },
+  { name: "Navigational", value: 2 },
+];
+
+const topKeywords = [
+  { kw: "medway therapy", vol: 500, diff: "High", page: "Homepage", exists: true },
+  { kw: "therapy kent", vol: 500, diff: "High", page: "Kent Hub", exists: false },
+  { kw: "therapy maidstone", vol: 500, diff: "High", page: "Kent Hub", exists: false },
+  { kw: "relationship counsellor kent", vol: 500, diff: "Med", page: "Couples Page", exists: false },
+  { kw: "couples therapy does it work", vol: 500, diff: "Med", page: "NEW Blog", exists: false },
+  { kw: "therapist canterbury", vol: 500, diff: "High", page: "Kent Hub", exists: false },
+  { kw: "cbt tunbridge wells", vol: 500, diff: "Low", page: "Kent Hub", exists: false },
+  { kw: "cbt or counselling", vol: 70, diff: "Med", page: "CBT Page", exists: false },
+  { kw: "counselling chatham", vol: 50, diff: "High", page: "Chatham Page", exists: true },
+  { kw: "therapy in gillingham", vol: 50, diff: "High", page: "Homepage", exists: true },
+];
+
+const missingPages = [
+  { page: "Couples Therapy / Relationship Counselling Page", volume: "1,550+/mo combined", impact: "Critical", reason: "No dedicated couples/relationship page. 500/mo keywords with no target." },
+  { page: "CBT / Cognitive Behavioural Therapy Page", volume: "200+/mo", impact: "Critical", reason: "No dedicated CBT service page. Core modality with multiple keywords." },
+  { page: "Anxiety Service Page", volume: "300+/mo", impact: "Critical", reason: "No dedicated anxiety therapy page despite anxiety being the primary blog topic." },
+  { page: "Kent County Hub Page", volume: "2,000+/mo", impact: "High", reason: "No county-level page. Multiple 500/mo Kent keywords unaddressed." },
+  { page: "Blog: Does Couples Therapy Work?", volume: "500/mo", impact: "High", reason: "Highest-volume single blog topic cluster. No content exists." },
+  { page: "CBT Education / FAQ Page", volume: "Low–Med", impact: "Medium", reason: "Multiple high-intent CBT informational queries with no landing page." },
+  { page: "Rochester Location Page", volume: "100/mo", impact: "Medium", reason: "Competitor (Talking Helps) is Rochester-based. No ES Therapy targeting." },
+  { page: "Gillingham Dedicated Location Page", volume: "100/mo", impact: "Medium", reason: "ES Therapy IS in Gillingham but has no location-specific page beyond homepage." },
+  { page: "Bereavement Counselling Page", volume: "150/mo", impact: "Medium", reason: "bereavement counselling kent — 150/mo, SD 18. Not targeted." },
+  { page: "PTSD / Trauma Page", volume: "370/mo", impact: "Medium", reason: "cbt therapy for ptsd (300/mo) + ptsd therapy kent (70/mo). Competitor has PTSD category." },
+];
+
+const competitors = [
+  { name: "ATT&W (Amanda Tooms)", threat: "High", reviews: "16 × 5.0★", note: "#1 local pack 2/3 target SERPs" },
+  { name: "Medway Counselling (Westcott)", threat: "High", reviews: "BACP Senior Acc.", note: "UKCP registered, strong credentials" },
+  { name: "CBT & Counselling Kent", threat: "Medium", reviews: "—", note: "Targets CBT Medway explicitly" },
+  { name: "Talking Helps Therapy", threat: "Medium", reviews: "—", note: "Rochester base, £50/session" },
+  { name: "Relationship Counselling Kent", threat: "Medium", reviews: "—", note: "Couples niche, Chatham/Medway" },
+  { name: "Therapy With Tom", threat: "Medium", reviews: "—", note: "Medway couples/individual" },
+  { name: "Intrapsyche Therapy", threat: "Medium", reviews: "—", note: "Gillingham private practice" },
+  { name: "Kent Therapy Clinic", threat: "Medium", reviews: "—", note: "Broader Kent coverage" },
+  { name: "Rebecca Hampson CBT", threat: "Low", reviews: "—", note: "Lower visibility" },
+  { name: "Clear Clarity", threat: "Low", reviews: "—", note: "Gillingham, £45-70" },
+  { name: "Medway Counselling (Beale)", threat: "Low", reviews: "—", note: "Solo practitioner" },
+  { name: "KACP Maidstone", threat: "Low", reviews: "—", note: "Maidstone only" },
+];
+
+const blogTopics = [
+  { title: "Does Couples Therapy Actually Work?", cluster: "Couples", volume: "500/mo", priority: "TOP" },
+  { title: "What Is CBT Counselling — How Does It Work?", cluster: "CBT", volume: "Low–Med", priority: "High" },
+  { title: "CBT vs Counselling — What's the Difference?", cluster: "CBT", volume: "70/mo", priority: "High" },
+  { title: "CBT Exercises You Can Start Today", cluster: "CBT", volume: "Low", priority: "High" },
+  { title: "Does CBT Work for ADHD?", cluster: "CBT", volume: "50/mo", priority: "High" },
+  { title: "Is CBT Good for Anxiety?", cluster: "CBT+Anxiety", volume: "Med", priority: "High" },
+  { title: "Does Anxiety Go Away With CBT?", cluster: "CBT+Anxiety", volume: "Low", priority: "High" },
+  { title: "Good Coping Skills for Anxiety", cluster: "CBT+Anxiety", volume: "Med", priority: "High" },
+  { title: "What to Expect: First CBT Session", cluster: "First Steps", volume: "Low", priority: "High" },
+  { title: "Mental Health Support in Medway", cluster: "Local", volume: "50/mo", priority: "High" },
+];
+
+const videoTopics = [
+  { title: "Does Couples Therapy Actually Work?", format: "Talking head · 3-4 min", priority: "TOP" },
+  { title: "What Is CBT? A Therapist Explains", format: "Talking head · 90s", priority: "High" },
+  { title: "What Does a CBT Session Look Like?", format: "Walk-through · 3-5 min", priority: "High" },
+  { title: "How CBT Helps With Anxiety", format: "Talking head · 2-3 min", priority: "High" },
+  { title: "3 CBT Exercises You Can Try at Home", format: "Demo · 3-4 min", priority: "High" },
+  { title: "What to Expect From Your First Session", format: "Talking head · 2 min", priority: "High" },
+  { title: "Therapy in Medway — ES Therapy Intro", format: "Practice intro · 2-3 min", priority: "High" },
+];
+
+const localKwMap = [
+  { loc: "Medway", p1: 6, p2: 0, p3: 0, vol: 1500 },
+  { loc: "Chatham", p1: 8, p2: 0, p3: 0, vol: 300 },
+  { loc: "Gillingham", p1: 3, p2: 0, p3: 0, vol: 100 },
+  { loc: "Kent", p1: 0, p2: 10, p3: 0, vol: 1650 },
+  { loc: "Maidstone", p1: 0, p2: 2, p3: 0, vol: 500 },
+  { loc: "Canterbury", p1: 0, p2: 0, p3: 1, vol: 500 },
+  { loc: "Tunbridge Wells", p1: 0, p2: 0, p3: 2, vol: 1000 },
+  { loc: "Dartford", p1: 0, p2: 0, p3: 1, vol: 50 },
+  { loc: "Rainham", p1: 2, p2: 0, p3: 0, vol: 60 },
+];
+
+const pluginList = [
+  { name: "All in One SEO", status: "active", note: "SEO plugin — instructions say Rank Math" },
+  { name: "Redirection", status: "active", note: "Required — installed correctly" },
+  { name: "LiteSpeed Cache", status: "active", note: "Caching/performance" },
+  { name: "Broken Link Checker", status: "active", note: "Useful for link audit" },
+  { name: "Contact Form 7", status: "active", note: "Forms" },
+  { name: "MonsterInsights", status: "active", note: "GA integration" },
+  { name: "Site Kit by Google", status: "active", note: "GSC + GA integration" },
+  { name: "Sucuri Security", status: "active", note: "Security" },
+  { name: "AI Engine", status: "active", note: "AI chatbot — check if needed" },
+  { name: "Bold Builder", status: "active", note: "Page builder (theme)" },
+  { name: "Hotjar", status: "active", note: "Heatmaps" },
+  { name: "Cookie Notice", status: "active", note: "GDPR" },
+];
+
+// ─── SEO HEALTH SCORES ─────────────────────────────────────────────────────
+const healthScores = [
+  { area: "Technical SEO", score: 42, items: "Schema incomplete, sitemap issues, 301 chains, tag bloat, template pages exposed" },
+  { area: "On-Page SEO", score: 55, items: "Meta titles mostly good, some overlength. Blog desc broken. Bold Builder hides headings from crawlers." },
+  { area: "Content", score: 48, items: "13 blog posts. No couples, CBT, anxiety, or local resource pages. Good anxiety series started." },
+  { area: "Local SEO", score: 45, items: "Chatham + Rainham pages created. No Kent hub. GBP audit not done. NAP unknown." },
+  { area: "E-E-A-T", score: 35, items: "Author bylines present. But no BABCP/accreditation visible, org schema has placeholder, no MedicalBusiness markup." },
+  { area: "Link Authority", score: 30, items: "275+ internal 301 chains. No backlink outreach started. 9+ directory opps identified but not acted on." },
+];
+
+// ─── TAB CONFIG ─────────────────────────────────────────────────────────────
+const TABS = ["Overview", "Site Audit", "Technical", "Keywords", "Content Plan", "Local SEO", "Batch Progress"];
+
+// ─── MAIN ───────────────────────────────────────────────────────────────────
+export default function Dashboard() {
+  const [tab, setTab] = useState("Overview");
+
+  return (
+    <div style={{ fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif", background: C.bg, minHeight: "100vh", color: C.text }}>
+      {/* Header */}
+      <div style={{ background: "linear-gradient(135deg, #1B4332 0%, #2D6A4F 100%)", padding: "24px 28px 16px", color: "white" }}>
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 2 }}>
+            <div style={{ width: 36, height: 36, borderRadius: 8, background: "rgba(255,255,255,0.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>ES</div>
+            <div>
+              <h1 style={{ fontSize: 20, fontWeight: 700, margin: 0 }}>ES Therapy Centre — SEO Dashboard</h1>
+              <p style={{ fontSize: 12, opacity: 0.7, margin: 0 }}>estherapycentre.com · Comprehensive Audit + Keyword Research · 8 Apr 2026</p>
+            </div>
+          </div>
+          <div style={{ display: "flex", gap: 2, marginTop: 14, flexWrap: "wrap" }}>
+            {TABS.map(t => (
+              <button key={t} onClick={() => setTab(t)} style={{ padding: "7px 14px", borderRadius: "8px 8px 0 0", border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: tab === t ? C.bg : "transparent", color: tab === t ? C.text : "rgba(255,255,255,0.7)", transition: "all 0.15s" }}>{t}</button>
+            ))}
+          </div>
+        </div>
+      </div>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "20px 28px 48px" }}>
+        {tab === "Overview" && <Overview />}
+        {tab === "Site Audit" && <SiteAudit />}
+        {tab === "Technical" && <Technical />}
+        {tab === "Keywords" && <Keywords />}
+        {tab === "Content Plan" && <ContentPlan />}
+        {tab === "Local SEO" && <LocalSEO />}
+        {tab === "Batch Progress" && <BatchProgress />}
+      </div>
+    </div>
+  );
+}
+
+// ─── TAB: OVERVIEW ──────────────────────────────────────────────────────────
+function Overview() {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 28 }}>
+        <Stat icon="🌐" label="Pages in Sitemap" value="32" sub="19 pages + 13 posts" color={C.pri} />
+        <Stat icon="🔑" label="Keywords Found" value="468" sub="212 actionable targets" color={C.acc} />
+        <Stat icon="🏢" label="Competitors" value="12" sub="2 high-threat" color={C.info} />
+        <Stat icon="📝" label="Blog Posts" value="13" sub="3 anxiety series" color={C.warm} />
+        <Stat icon="🚨" label="Critical Issues" value="8" sub="Schema, tags, 301s" color={C.alert} />
+        <Stat icon="📋" label="Batch Progress" value="2/12" sub="Partial completion" color={C.warn} />
+      </div>
+
+      {/* Health radar */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 28 }}>
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Scored 0-100 across 6 areas">SEO Health Scores</Sec>
+          <ResponsiveContainer width="100%" height={260}>
+            <RadarChart data={healthScores}>
+              <PolarGrid stroke="#E5E7EB" />
+              <PolarAngleAxis dataKey="area" fontSize={11} />
+              <PolarRadiusAxis domain={[0, 100]} tick={false} />
+              <Radar dataKey="score" stroke={C.pri} fill={C.pri} fillOpacity={0.25} strokeWidth={2} />
+            </RadarChart>
+          </ResponsiveContainer>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
+            {healthScores.map((h, i) => (
+              <div key={i} style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 4 }}>
+                <ScoreDot score={h.score} /> <span style={{ color: C.mut }}>{h.area}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Cumulative keywords discovered">Research Velocity</Sec>
+          <ResponsiveContainer width="100%" height={260}>
+            <LineChart data={dailyResearch}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="date" fontSize={11} />
+              <YAxis fontSize={11} />
+              <Tooltip />
+              <Line type="monotone" dataKey="cum" stroke={C.pri} strokeWidth={2} dot={{ fill: C.pri, r: 4 }} name="Cumulative" />
+              <Line type="monotone" dataKey="keywords" stroke={C.acc} strokeWidth={1.5} strokeDasharray="4 4" dot={{ fill: C.acc, r: 3 }} name="Daily" />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* Flags */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Sec sub="Top-priority findings from site audit + keyword research">Critical Flags</Sec>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <FlagCard type="critical" text='Organization schema description is "Say more" — placeholder text visible to Google.' />
+          <FlagCard type="critical" text="Schema logo URL points to old Hostinger staging domain (vb8.b79.myftpupload.com)." />
+          <FlagCard type="critical" text="No dedicated Couples Therapy page — 1,550+/mo keyword cluster completely unaddressed." />
+          <FlagCard type="critical" text="No dedicated CBT service page — core modality with multiple keyword targets." />
+          <FlagCard type="critical" text="No dedicated Anxiety service page despite being the primary blog topic." />
+          <FlagCard type="critical" text="63 tags, 19 with 0 posts — dozens of thin indexed pages competing with real content." />
+          <FlagCard type="threat" text="ATT&W (Amanda Tooms) — 16 reviews × 5.0★, dominates local pack for 2/3 monitored SERPs." />
+          <FlagCard type="quick" text="Couples counselling Rainham Kent — SD 10, zero competition. ES Therapy IS in Rainham." />
+          <FlagCard type="quick" text="CBT therapy Gillingham — SD 10, 30/mo. Easiest local keyword in the dataset." />
+          <FlagCard type="action" text='/blog/ meta description is "Say more" — needs a proper SEO description immediately.' />
+          <FlagCard type="action" text="Blog Post Template page is live and in sitemap — set to draft or noindex." />
+          <FlagCard type="verify" text="BABCP accreditation — 880/mo, SD 16. Confirm if Dr Santos is BABCP-accredited." />
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── TAB: SITE AUDIT ────────────────────────────────────────────────────────
+function SiteAudit() {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="📄" label="Pages" value="19" sub="In page sitemap" color={C.pri} />
+        <Stat icon="✍️" label="Posts" value="13" sub="In post sitemap" color={C.acc} />
+        <Stat icon="🏷️" label="Tags" value="63" sub="19 empty — thin content" color={C.alert} />
+        <Stat icon="📂" label="Categories" value="35" sub="Some duplicates" color={C.warn} />
+      </div>
+
+      {/* All pages table */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24, overflowX: "auto" }}>
+        <Sec sub="All pages in sitemap with meta analysis">Page-by-Page Metadata Audit</Sec>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+              {["URL", "Meta Title", "Title Len", "Desc Len", "Schema", "Status"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {sitePages.map((p, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 500, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.url}</td>
+                <td style={{ padding: "8px 10px", maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p.metaDesc === '"Say more"' ? C.alert : C.text }}>{p.title}</td>
+                <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                  <span style={{ color: p.titleLen > 60 ? C.alert : C.pass, fontWeight: 600 }}>{p.titleLen}</span>
+                </td>
+                <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                  <span style={{ color: p.descLen < 50 ? C.alert : p.descLen < 140 ? C.warn : C.pass, fontWeight: 600 }}>{p.descLen}</span>
+                </td>
+                <td style={{ padding: "8px 10px", fontSize: 10, color: C.mut }}>{p.schema}</td>
+                <td style={{ padding: "8px 10px" }}><Badge color={p.status.includes("New") ? C.pass : C.info}>{p.status}</Badge></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Blog posts */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24 }}>
+        <Sec sub="All 13 published blog posts">Blog Post Inventory</Sec>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+              {["Title", "Date", "Author", "Categories"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {blogPosts.map((p, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 500 }}>{p.title}</td>
+                <td style={{ padding: "8px 10px", color: C.mut }}>{p.date}</td>
+                <td style={{ padding: "8px 10px", color: C.mut }}>{p.author}</td>
+                <td style={{ padding: "8px 10px" }}><Badge color={C.info}>{p.categories}</Badge></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Missing pages */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Sec sub="Pages that should exist based on keyword research">Missing Pages — Content Gaps</Sec>
+        {missingPages.map((p, i) => (
+          <div key={i} style={{ padding: "12px 14px", marginBottom: 10, borderRadius: 8, background: "#F9FAFB", borderLeft: `3px solid ${p.impact === "Critical" ? C.alert : p.impact === "High" ? C.warn : C.info}` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontWeight: 600, fontSize: 13 }}>{p.page}</span>
+              <div style={{ display: "flex", gap: 6 }}>
+                <Badge color={p.impact === "Critical" ? C.alert : p.impact === "High" ? C.warn : C.info}>{p.impact}</Badge>
+                <Badge color={C.pri}>{p.volume}</Badge>
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.mut, marginTop: 3 }}>{p.reason}</div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+// ─── TAB: TECHNICAL ─────────────────────────────────────────────────────────
+function Technical() {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="🚨" label="High Issues" value="7" color={C.alert} />
+        <Stat icon="⚠️" label="Medium Issues" value="6" color={C.warn} />
+        <Stat icon="ℹ️" label="Low Issues" value="3" color={C.info} />
+        <Stat icon="🔌" label="Active Plugins" value="31" sub="Some may conflict" color={C.mut} />
+      </div>
+
+      {/* Issues table */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24 }}>
+        <Sec sub="All issues found during audit, ranked by severity">Technical Issues Register</Sec>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+              {["Severity", "Area", "Issue", "Detail"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {technicalIssues.sort((a, b) => ({ high: 0, medium: 1, low: 2 }[a.severity] || 3) - ({ high: 0, medium: 1, low: 2 }[b.severity] || 3)).map((t, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px" }}><Badge color={t.severity === "high" ? C.alert : t.severity === "medium" ? C.warn : C.info}>{t.severity}</Badge></td>
+                <td style={{ padding: "8px 10px", fontWeight: 600, whiteSpace: "nowrap" }}>{t.area}</td>
+                <td style={{ padding: "8px 10px", fontWeight: 500 }}>{t.issue}</td>
+                <td style={{ padding: "8px 10px", color: C.mut, fontSize: 11, maxWidth: 300 }}>{t.detail}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Plugin list */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Key plugins currently active (31 total)">Plugin Audit</Sec>
+          {pluginList.map((p, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "6px 0", borderBottom: i < pluginList.length - 1 ? "1px solid #F3F4F6" : "none", fontSize: 12 }}>
+              <span style={{ fontWeight: 500 }}>{p.name}</span>
+              <span style={{ color: C.mut, fontSize: 11, maxWidth: 200, textAlign: "right" }}>{p.note}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Current sitemap structure">Sitemap & Robots</Sec>
+          <div style={{ fontSize: 13, lineHeight: 1.8 }}>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>robots.txt</div>
+            <div style={{ background: "#F9FAFB", padding: 12, borderRadius: 6, fontFamily: "monospace", fontSize: 11, marginBottom: 16 }}>
+              User-agent: *<br />
+              Disallow: /wp-admin/<br />
+              Allow: /wp-admin/admin-ajax.php<br />
+              Sitemap: sitemap.xml<br />
+              <span style={{ color: C.alert }}>Sitemap: sitemap.rss ← remove</span>
+            </div>
+            <div style={{ fontWeight: 600, marginBottom: 8 }}>Sitemap Index</div>
+            <div style={{ background: "#F9FAFB", padding: 12, borderRadius: 6, fontSize: 11 }}>
+              <div>post-sitemap.xml — 14 URLs (13 posts + /blog/)</div>
+              <div>page-sitemap.xml — 19 URLs</div>
+              <div style={{ color: C.alert, marginTop: 6 }}>Issue: blog-post-template in page sitemap</div>
+              <div style={{ color: C.alert }}>Issue: footer-blog, footer-home-02 pages published</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── TAB: KEYWORDS ──────────────────────────────────────────────────────────
+function Keywords() {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="🔑" label="Total Discovered" value="468" color={C.pri} />
+        <Stat icon="🎯" label="Targets" value="212" sub="45% relevance" color={C.acc} />
+        <Stat icon="💰" label="Transactional" value="137" sub="Ready-to-convert" color={C.pri} />
+        <Stat icon="📚" label="Informational" value="104" sub="Blog + FAQ content" color={C.info} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1.3fr 1fr", gap: 20, marginBottom: 24 }}>
+        {/* Top keywords */}
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Highest volume keywords — page existence checked">Top Keywords vs. Site Coverage</Sec>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+                {["Keyword", "Vol/mo", "Diff", "Target Page", "Page Exists?"].map(h => (
+                  <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {topKeywords.map((kw, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "7px 8px", fontWeight: 500 }}>{kw.kw}</td>
+                  <td style={{ padding: "7px 8px", fontWeight: 700, color: C.pri }}>{kw.vol}</td>
+                  <td style={{ padding: "7px 8px" }}><Badge color={kw.diff === "Low" ? C.pass : kw.diff === "Med" ? C.warn : C.alert}>{kw.diff}</Badge></td>
+                  <td style={{ padding: "7px 8px", color: kw.exists ? C.text : C.alert, fontWeight: kw.exists ? 400 : 600 }}>{kw.page}</td>
+                  <td style={{ padding: "7px 8px" }}>{kw.exists ? <Badge color={C.pass}>Yes</Badge> : <Badge color={C.alert}>No</Badge>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Intent + Relevance */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", flex: 1 }}>
+            <Sec sub="Target vs partial vs irrelevant">Keyword Relevance</Sec>
+            <ResponsiveContainer width="100%" height={160}>
+              <PieChart>
+                <Pie data={kwByRelevance} cx="50%" cy="50%" innerRadius={40} outerRadius={65} dataKey="value" paddingAngle={2}>
+                  {kwByRelevance.map((e, i) => <Cell key={i} fill={e.color} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
+              {kwByRelevance.map((r, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", gap: 3, fontSize: 10 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: 2, background: r.color, display: "inline-block" }} /> {r.name} ({r.value})
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", flex: 1 }}>
+            <Sec sub="Search intent distribution">Intent Breakdown</Sec>
+            <ResponsiveContainer width="100%" height={160}>
+              <BarChart data={kwByIntent} barSize={18}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                <XAxis dataKey="name" fontSize={10} />
+                <YAxis fontSize={10} />
+                <Tooltip />
+                <Bar dataKey="value" fill={C.sec} radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      </div>
+
+      {/* Competitors */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Sec sub="12 local competitors profiled during research">Competitor Landscape</Sec>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+              {["Competitor", "Threat", "Reviews/Creds", "Key Intel"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {competitors.map((c, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 500 }}>{c.name}</td>
+                <td style={{ padding: "8px 10px" }}><Badge color={c.threat === "High" ? C.alert : c.threat === "Medium" ? C.warn : C.acc}>{c.threat}</Badge></td>
+                <td style={{ padding: "8px 10px", fontSize: 11 }}>{c.reviews}</td>
+                <td style={{ padding: "8px 10px", color: C.mut, fontSize: 11 }}>{c.note}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </>
+  );
+}
+
+// ─── TAB: CONTENT PLAN ──────────────────────────────────────────────────────
+function ContentPlan() {
+  const [view, setView] = useState("blog");
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="📝" label="Blog Topics Queued" value="18" sub="10 high-priority" color={C.warm} />
+        <Stat icon="🎬" label="Video Topics" value="10" sub="7 high-priority" color={C.warn} />
+        <Stat icon="🆕" label="Pages to Create" value="10" sub="3 critical, 4 high" color={C.alert} />
+        <Stat icon="✅" label="Existing Posts" value="13" sub="Anxiety series: 3" color={C.pass} />
+      </div>
+
+      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        {[["blog", "Blog Queue"], ["video", "Video Queue"], ["existing", "Existing Content"]].map(([k, l]) => (
+          <button key={k} onClick={() => setView(k)} style={{ padding: "5px 14px", borderRadius: 999, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600, background: view === k ? C.pri : "#E5E7EB", color: view === k ? "white" : C.text }}>{l}</button>
+        ))}
+      </div>
+
+      {view === "blog" && (
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Priority blog topics from keyword research">Blog Content Queue</Sec>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead><tr style={{ borderBottom: "2px solid #E5E7EB" }}>{["Title", "Cluster", "Volume", "Priority"].map(h => <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {blogTopics.map((t, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "8px 10px", fontWeight: 500 }}>{t.title}</td>
+                  <td style={{ padding: "8px 10px" }}><Badge color={C.info}>{t.cluster}</Badge></td>
+                  <td style={{ padding: "8px 10px", color: C.mut }}>{t.volume}</td>
+                  <td style={{ padding: "8px 10px" }}><Badge color={t.priority === "TOP" ? C.alert : t.priority === "High" ? C.warn : C.info}>{t.priority}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {view === "video" && (
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="YouTube & social video content plan">Video Content Queue</Sec>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead><tr style={{ borderBottom: "2px solid #E5E7EB" }}>{["Title", "Format", "Priority"].map(h => <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {videoTopics.map((v, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "8px 10px", fontWeight: 500 }}>{v.title}</td>
+                  <td style={{ padding: "8px 10px", color: C.mut }}>{v.format}</td>
+                  <td style={{ padding: "8px 10px" }}><Badge color={v.priority === "TOP" ? C.alert : v.priority === "High" ? C.warn : C.info}>{v.priority}</Badge></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {view === "existing" && (
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Content already live — cross-referenced with keyword targets">Existing Blog Content Audit</Sec>
+          {blogPosts.map((p, i) => {
+            const matchesKwResearch = p.title.toLowerCase().includes("anxiety") || p.title.toLowerCase().includes("first session") || p.title.toLowerCase().includes("therapy");
+            return (
+              <div key={i} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: i < blogPosts.length - 1 ? "1px solid #F3F4F6" : "none", fontSize: 12 }}>
+                <div>
+                  <span style={{ fontWeight: 500 }}>{p.title}</span>
+                  <span style={{ color: C.mut, marginLeft: 8 }}>{p.date}</span>
+                  {p.series && <Badge color={C.acc}>{p.series}</Badge>}
+                </div>
+                {matchesKwResearch ? <Badge color={C.pass}>Keyword match</Badge> : <Badge color={C.mut}>No target KW</Badge>}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+}
+
+// ─── TAB: LOCAL SEO ─────────────────────────────────────────────────────────
+function LocalSEO() {
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="📍" label="Local Keywords" value="41" sub="Across 9 locations" color={C.pri} />
+        <Stat icon="🔴" label="P1 Core" value="22" sub="Medway, Chatham, Gillingham" color={C.alert} />
+        <Stat icon="✅" label="Location Pages" value="2" sub="Chatham + Rainham (new)" color={C.pass} />
+        <Stat icon="❌" label="Missing Location Pages" value="4+" sub="Kent Hub, Rochester, Gillingham, Maidstone" color={C.fail} />
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 24 }}>
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Keywords by area and priority tier">Local Keyword Map</Sec>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={localKwMap} barSize={14}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis dataKey="loc" fontSize={10} angle={-25} textAnchor="end" height={50} />
+              <YAxis fontSize={10} />
+              <Tooltip />
+              <Legend fontSize={11} />
+              <Bar dataKey="p1" stackId="a" fill={C.alert} name="P1 Core" />
+              <Bar dataKey="p2" stackId="a" fill={C.warn} name="P2 Medium" />
+              <Bar dataKey="p3" stackId="a" fill={C.info} name="P3 Wider" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Monthly search volume by area">Volume by Location</Sec>
+          <ResponsiveContainer width="100%" height={280}>
+            <BarChart data={localKwMap} layout="vertical" barSize={14}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+              <XAxis type="number" fontSize={10} />
+              <YAxis type="category" dataKey="loc" fontSize={10} width={100} />
+              <Tooltip />
+              <Bar dataKey="vol" fill={C.sec} radius={[0, 4, 4, 0]} name="Volume/mo" />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* SERP + GBP */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="3 monitored SERPs">SERP Feature Tracking</Sec>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead><tr style={{ borderBottom: "2px solid #E5E7EB" }}>{["Query", "Local Pack", "Snippet", "Notes"].map(h => <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>)}</tr></thead>
+            <tbody>
+              {[
+                { q: "CBT counselling Medway", lp: true, sn: false, note: "NHS + directories dominate" },
+                { q: "Anxiety therapy Kent", lp: false, sn: true, note: "Featured snippet appeared Apr 2" },
+                { q: "Couples therapy Medway", lp: true, sn: false, note: "Local pack key battleground" },
+              ].map((s, i) => (
+                <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                  <td style={{ padding: "7px 8px", fontWeight: 500 }}>{s.q}</td>
+                  <td style={{ padding: "7px 8px" }}><Badge color={s.lp ? C.pass : C.mut}>{s.lp ? "Yes" : "No"}</Badge></td>
+                  <td style={{ padding: "7px 8px" }}><Badge color={s.sn ? C.warn : C.mut}>{s.sn ? "Yes" : "No"}</Badge></td>
+                  <td style={{ padding: "7px 8px", color: C.mut, fontSize: 11 }}>{s.note}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <Sec sub="Directory listings and link building">Backlink Opportunities</Sec>
+          {[
+            { name: "Counselling Directory", status: "Submit" },
+            { name: "Psychology Today UK", status: "Claim" },
+            { name: "BACP Find a Therapist", status: "Verify" },
+            { name: "UKCP Find a Therapist", status: "Verify" },
+            { name: "Welldoing UK", status: "Submit" },
+            { name: "Bark.com", status: "Create" },
+            { name: "Yell.com", status: "Claim" },
+            { name: "Relate MNK", status: "Partnership" },
+            { name: "AXA Health / Aviva", status: "Apply" },
+          ].map((l, i) => (
+            <div key={i} style={{ display: "flex", justifyContent: "space-between", padding: "5px 0", borderBottom: i < 8 ? "1px solid #F3F4F6" : "none", fontSize: 12 }}>
+              <span>{l.name}</span>
+              <Badge color={C.info}>{l.status}</Badge>
+            </div>
+          ))}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ─── TAB: BATCH PROGRESS ────────────────────────────────────────────────────
+function BatchProgress() {
+  const done = batchProgress.filter(b => b.status === "done").length;
+  const partial = batchProgress.filter(b => b.status === "partial").length;
+  const todo = batchProgress.filter(b => b.status === "todo").length;
+
+  return (
+    <>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
+        <Stat icon="✅" label="Completed" value={`${done}`} color={C.pass} />
+        <Stat icon="🔶" label="Partial" value={`${partial}`} color={C.warn} />
+        <Stat icon="⬜" label="Not Started" value={`${todo}`} color={C.mut} />
+        <Stat icon="📅" label="Plan Duration" value="6 months" sub="Jan–Jun 2026" color={C.info} />
+      </div>
+
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", marginBottom: 24 }}>
+        <Sec sub="6-month implementation plan from SEO instructions">Batch Implementation Tracker</Sec>
+
+        {/* Progress bar */}
+        <div style={{ display: "flex", height: 8, borderRadius: 4, overflow: "hidden", marginBottom: 20, background: "#E5E7EB" }}>
+          <div style={{ width: `${(done / 12) * 100}%`, background: C.pass }} />
+          <div style={{ width: `${(partial / 12) * 100}%`, background: C.warn }} />
+        </div>
+
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+          <thead>
+            <tr style={{ borderBottom: "2px solid #E5E7EB" }}>
+              {["Batch", "Name", "Month", "Status", "Notes"].map(h => (
+                <th key={h} style={{ textAlign: "left", padding: "6px 10px", color: C.mut, fontWeight: 600, fontSize: 11 }}>{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {batchProgress.map((b, i) => (
+              <tr key={i} style={{ borderBottom: "1px solid #F3F4F6" }}>
+                <td style={{ padding: "8px 10px", fontWeight: 700, fontFamily: "monospace" }}>{b.id}</td>
+                <td style={{ padding: "8px 10px", fontWeight: 500 }}>{b.name}</td>
+                <td style={{ padding: "8px 10px", color: C.mut }}>{b.month}</td>
+                <td style={{ padding: "8px 10px" }}><StatusBadge status={b.status} /></td>
+                <td style={{ padding: "8px 10px", color: C.mut, fontSize: 11, maxWidth: 350 }}>{b.notes}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Key blockers */}
+      <div style={{ background: C.card, borderRadius: 12, padding: 22, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+        <Sec sub="Issues that need resolution before batches can proceed">Blockers & Dependencies</Sec>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+          <FlagCard type="action" text="B0: Confirm HTTPS redirect is working (http → https). Prerequisite for all batches." />
+          <FlagCard type="action" text="B0: AIOSEO is installed instead of Rank Math. All batch instructions reference Rank Math UI. Either switch or adapt instructions." />
+          <FlagCard type="action" text="B1: Blog nav link still points to parameterised URL. Single highest-impact quick fix." />
+          <FlagCard type="critical" text="B3: 63 tags not noindexed. 49+ thin content pages being crawled. High urgency." />
+          <FlagCard type="action" text="B5: Keyword research complete — metadata rewrites can now proceed for all pages." />
+          <FlagCard type="action" text="B8: No couples, CBT, anxiety, or Kent hub pages exist — content creation is the biggest gap." />
+          <FlagCard type="verify" text="B9: Schema markup entirely absent for MedicalBusiness, Service, FAQPage types." />
+          <FlagCard type="action" text="B10: Chatham + Rainham pages done. Still need GBP audit, citations check, Rochester + Kent hub pages." />
+        </div>
+      </div>
+    </>
+  );
+}
